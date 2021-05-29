@@ -35,6 +35,39 @@ void processNPP(ProcessList pl);
 void processHRRN(ProcessList pl);
 void destroyProcessList(ProcessList *pl);
 
+struct processB{
+	int id;
+	int* allocation;
+	int* max;
+	int* need;
+	int resources;
+	int index;
+};
+typedef struct processB *ProcessB;
+
+ProcessB newProcessB(int id, int resources, int allocation[resources], int max[resources]);
+void displayProcessB(ProcessB pb);
+void destroyProcessB(ProcessB *pb);
+
+struct processListB{
+	ProcessB* plb;
+	int count;
+	int size;
+	int resources;
+	int* available;
+	int* safeSequence; 
+};
+typedef struct processListB *ProcessListB;
+
+ProcessListB newProcessListB(int size, int resources);
+void addPProcessB(ProcessListB plb, ProcessB pb);
+void addCProcessB(ProcessListB plb,int id, int resources, int allocation[resources], int max[resources]);
+void declareAvailable(ProcessListB plb,int available[]);
+void processBBankersAlgo(ProcessListB plb);
+void displayProcessListB(ProcessListB plb);
+void destroyProcessListB(ProcessListB *plb);
+
+
 typedef struct node *nodeptr;
 struct node{
 	Process p;

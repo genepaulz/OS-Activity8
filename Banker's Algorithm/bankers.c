@@ -266,6 +266,67 @@ void processRR(ProcessList pl, int quantum){
 	printf("		RR Processing\n\n");
 	destroy(&q);
 }
+
+void sortQueueP(Queue q){
+	int i, key, j;
+	Process swap1,swap2;
+	int n = q->count;
+	Process p[q->count];
+	for( i = 0 ; i < n ; i++ ){
+		p[i] = head(q);
+		dequeue(q);
+	}
+	
+    for (i = 1; i < n; i++) {
+        key = p[i]->at;
+        swap1 = p[i];
+        j = i - 1;
+ 
+        /* Move elements of arr[0..i-1], that are
+          greater than key, to one position ahead
+          of their current position */
+        while (j >= 0 && p[j]->at > key) {
+        	swap2 = p[j];
+            p[j + 1] = swap2;
+            j = j - 1;
+        }
+        p[j + 1] = swap1;
+    }
+	for( i = 0 ; i < n ; i++ ){
+		enqueue(q,p[i]);
+	}
+}
+
+void sortQueueH(Queue q,int CLOCK){
+	int i, j;
+	double key = 0.0f;
+	Process swap1,swap2;
+	int n = q->count;
+	Process p[q->count];
+	for( i = 0 ; i < n ; i++ ){
+		p[i] = head(q);
+		dequeue(q);
+	}
+	
+    for (i = 1; i < n; i++) {
+        key = ( (CLOCK - p[i]->at) + p[i]->bt) / p[i]->bt;
+        swap1 = p[i];
+        j = i - 1;
+        /* Move elements of arr[0..i-1], that are
+          greater than key, to one position ahead
+          of their current position */
+        while (j >= 0 && (( (CLOCK - p[j]->at) + p[j]->bt) / p[j]->bt) < key) {
+        	swap2 = p[j];
+            p[j + 1] = swap2;
+            j = j - 1;
+        }
+        p[j + 1] = swap1;
+    }
+	for( i = 0 ; i < n ; i++ ){
+		enqueue(q,p[i]);
+	}
+}
+
 void processNPP(ProcessList pl){
 	int CLOCK = 0;
 	double AWT = 0.0f;
@@ -368,6 +429,172 @@ void destroyProcessList(ProcessList *pl){
 	free(*pl);
 }
 
+ProcessB newProcessB(int id, int resources, int allocation[resources], int max[resources]){
+	int i;
+	ProcessB pb = (ProcessB)malloc(sizeof(struct processB));
+	pb->id = id;
+	pb->resources = resources;
+	pb->allocation = (int*)malloc(sizeof(int) * resources);
+	pb->max = (int*)malloc(sizeof(int) * resources);
+	pb->need = (int*)malloc(sizeof(int) * resources);
+	
+	for( i = 0 ; i < resources ; i++ ){
+		pb->allocation[i]  = allocation[i];
+		pb->max[i] = max[i];
+		pb->need[i] = pb->max[i] - pb->allocation[i];
+	}
+	return pb;
+}
+
+void displayProcessB(ProcessB pb){ //Up to 26 resources only
+	printf("Process	Allocation	Max	Need\n");
+	
+	int i;
+	for( i = 0 ; i < pb->resources ; i++ ){
+		if( i==0 )
+		printf("P%d	",pb->id);
+		else{
+			printf("	");
+		}
+		printf("%c %d		",65+i,pb->allocation[i]);
+		printf("%c %d	",65+i,pb->max[i]);
+		printf("%c %d\n",65+i,pb->need[i]);
+	}
+	printf("\n");
+}
+
+void destroyProcessB(ProcessB *pb){
+	(*pb)->need = NULL;
+	(*pb)->max = NULL;
+	(*pb)->allocation = NULL;
+	free((*pb)->need);
+	free((*pb)->max);
+	free((*pb)->allocation);
+	(*pb) = NULL;
+	free(*pb);
+}
+
+ProcessListB newProcessListB(int size, int resources){
+	ProcessListB plb = (ProcessListB)malloc(sizeof(struct processListB));
+	plb->plb = (ProcessB*)malloc(sizeof(struct processB) * size);
+	plb->count = 0;	
+	plb->size = size;
+	plb->resources = resources;
+	plb->available = (int*)malloc(sizeof(int)*resources);
+	plb->safeSequence = (int*)malloc(sizeof(int)*plb->count);
+}
+void expandProcessListB(ProcessListB plb, ProcessB pb){
+	ProcessListB temp = realloc(plb,plb->size+1);
+	plb = temp;
+	plb->size++;
+	plb->plb[plb->count++] = pb;
+	plb->safeSequence = realloc(plb->safeSequence,plb->count);
+}
+void addPProcessB(ProcessListB plb, ProcessB pb){
+	if( plb->size-1 == plb->count-1 ){
+		expandProcessListB(plb,pb);
+	}
+	else{
+		plb->plb[plb->count++] = pb;
+		plb->safeSequence = realloc(plb->safeSequence,plb->count);
+	}
+}
+void addCProcessB(ProcessListB plb,int id, int resources, int allocation[resources], int max[resources]){
+	ProcessB pb = newProcessB(id,resources,allocation,max);
+	addPProcessB(plb,pb)		;
+}
+void displayProcessListB(ProcessListB plb){
+	printf("Banker's Algo Process List\n");
+	printf("Process	Allocation	Max	Need\n");	
+	int i,j;
+	for( j = 0 ; j < plb->count ; j++){
+		for( i = 0 ; i < plb->plb[j]->resources ; i++ ){
+			if( i==0 )
+			printf("P%d	",plb->plb[j]->id);
+			else{
+				printf("	");
+			}
+			printf("%c %d		",65+i,plb->plb[j]->allocation[i]);
+			printf("%c %d	",65+i,plb->plb[j]->max[i]);
+			printf("%c %d\n",65+i,plb->plb[j]->need[i]);
+		}
+		printf("\n");
+	}
+}
+
+void declareAvailable(ProcessListB plb,int available[]){
+	plb->available = available;
+}
+
+void processBBankersAlgo(ProcessListB plb){
+	int processed[plb->count];
+	int processedCount = 0;
+	int availHistory[plb->count][plb->resources];
+	int i, j, k, l;
+	for( i = 0 ; i < plb->count ; i++ ){
+		processed[i] = 0;
+	}
+	for( i = 0 ; i < plb->count ; i++){
+		for( j = 0 ; j < plb->resources ; j++ ){
+			availHistory[i][j] = 0;
+		}
+	}
+	int flag = 0;
+	for( i = 0 ; i < plb->count ; i++ ){
+		for( j = 0 ; j < plb->count ; j++ ){
+			if( processed[j] == 0){				
+				flag = 0;
+				for( k = 0 ; k < plb->resources; k++ ){
+					if( plb->plb[j]->need[k] > plb->available[k]){
+						flag = 1;
+						break;
+					}
+				}
+				
+				if( flag == 0 ){
+					plb->safeSequence[processedCount] = plb->plb[j]->id;
+					
+					for( l = 0 ; l < plb->resources ; l++ ){
+						availHistory[processedCount][l] = plb->available[l];
+					}
+					
+					for( l = 0 ; l < plb->resources ; l++ ){
+						plb->available[l] += plb->plb[j]->allocation[l];
+					}
+					processed[j] = 1;
+					processedCount++;
+				}
+			}
+		}
+	}
+	printf("Available History\n");
+	for( k = 0 ; k < plb->count ; k++){
+		for( l = 0 ; l < plb->resources ; l++ ){
+			printf("%c %d\n",65+l,availHistory[k][l]);
+		}
+		printf("\n");
+	}
+	
+	for( i = 0 ; i < plb->resources ; i++ ){
+			printf("%c %d\n",65+i,plb->available[i]);
+		}
+		printf("\n");
+		
+	printf("Safe Sequence : ");
+	for( i = 0 ; i < plb->count ; i++ ){
+		printf("P%d ",plb->safeSequence[i]);
+	}
+}
+
+void destroyProcessListB(ProcessListB *plb){
+	(*plb)->available = NULL;
+	(*plb)->plb = NULL;
+	free((*plb)->available);
+	free((*plb)->plb);
+	free(*plb);
+	*plb = NULL;
+}
+
 Queue newQueue(){
 	Queue q = (Queue)malloc(sizeof(struct queue));
 	q->front = q->rear = NULL;
@@ -426,66 +653,6 @@ void sortQueue(Queue q){
           greater than key, to one position ahead
           of their current position */
         while (j >= 0 && p[j]->bt < key) {
-        	swap2 = p[j];
-            p[j + 1] = swap2;
-            j = j - 1;
-        }
-        p[j + 1] = swap1;
-    }
-	for( i = 0 ; i < n ; i++ ){
-		enqueue(q,p[i]);
-	}
-}
-
-void sortQueueP(Queue q){
-	int i, key, j;
-	Process swap1,swap2;
-	int n = q->count;
-	Process p[q->count];
-	for( i = 0 ; i < n ; i++ ){
-		p[i] = head(q);
-		dequeue(q);
-	}
-	
-    for (i = 1; i < n; i++) {
-        key = p[i]->at;
-        swap1 = p[i];
-        j = i - 1;
- 
-        /* Move elements of arr[0..i-1], that are
-          greater than key, to one position ahead
-          of their current position */
-        while (j >= 0 && p[j]->at > key) {
-        	swap2 = p[j];
-            p[j + 1] = swap2;
-            j = j - 1;
-        }
-        p[j + 1] = swap1;
-    }
-	for( i = 0 ; i < n ; i++ ){
-		enqueue(q,p[i]);
-	}
-}
-
-void sortQueueH(Queue q,int CLOCK){
-	int i, j;
-	double key = 0.0f;
-	Process swap1,swap2;
-	int n = q->count;
-	Process p[q->count];
-	for( i = 0 ; i < n ; i++ ){
-		p[i] = head(q);
-		dequeue(q);
-	}
-	
-    for (i = 1; i < n; i++) {
-        key = ( (CLOCK - p[i]->at) + p[i]->bt) / p[i]->bt;
-        swap1 = p[i];
-        j = i - 1;
-        /* Move elements of arr[0..i-1], that are
-          greater than key, to one position ahead
-          of their current position */
-        while (j >= 0 && (( (CLOCK - p[j]->at) + p[j]->bt) / p[j]->bt) < key) {
         	swap2 = p[j];
             p[j + 1] = swap2;
             j = j - 1;
